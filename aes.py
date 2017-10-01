@@ -96,9 +96,6 @@ def ecb_byte_at_a_time_attack(func_sample):
 			prefix = prefix[:-1]
 		filling = filling[1:] + secret[-1]
 	return secret
-	
-
-
 
 def _ecb_break_byte_at_a_time_sample(plaintext):
 	secret_str = (	"Um9sbGluJyBpbiBteSA1LjAKV2l0aCBteSByYWctdG9wIGRvd24gc28gbXkg"
@@ -108,6 +105,17 @@ def _ecb_break_byte_at_a_time_sample(plaintext):
 	key = _ecb_break_byte_at_a_time_sample.secret_key
 	return encrypt_ecb_128(plaintext + base64.decode(secret_str), key)
 _ecb_break_byte_at_a_time_sample.secret_key = os.urandom(16)
+
+def _ecb_break_byte_at_a_time_sample2(plaintext):
+	secret_str = (	"Um9sbGluJyBpbiBteSA1LjAKV2l0aCBteSByYWctdG9wIGRvd24gc28gbXkg"
+					"aGFpciBjYW4gYmxvdwpUaGUgZ2lybGllcyBvbiBzdGFuZGJ5IHdhdmluZyBq"
+					"dXN0IHRvIHNheSBoaQpEaWQgeW91IHN0b3A/IE5vLCBJIGp1c3QgZHJvdmUg"
+					"YnkK"	)
+	key = _ecb_break_byte_at_a_time_sample2.secret_key
+	prefix = _ecb_break_byte_at_a_time_sample2.prefix
+	return encrypt_ecb_128(prefix + plaintext + base64.decode(secret_str), key)
+_ecb_break_byte_at_a_time_sample2.secret_key = os.urandom(16)
+_ecb_break_byte_at_a_time_sample2.prefix = os.urandom(ord(os.urandom(1)))
 
 def _solve_set1_ch7():
 	file = open("./input/7.txt", "r")
@@ -150,3 +158,27 @@ def _solve_set2_ch11():
 
 def _solve_set2_ch12():
 	return ecb_byte_at_a_time_attack(_ecb_break_byte_at_a_time_sample)
+
+#This function finds secret prefix length. Knowing it, we can append corresponding
+#number of bytes to the prefix to make it's length is a multiple of the block size
+#AFter that we can use the same techic we used in challenge 12 to get secret postfix
+def _solve_set2_ch14():
+	func_sample = _ecb_break_byte_at_a_time_sample2
+	block_size = identify_block_size(func_sample)[0]
+	data = "A"
+	enc_data1 = func_sample("A")
+	enc_data2 = func_sample("B")
+	for i in range(len(enc_data1)):
+		if enc_data1[i] != enc_data2[i]:
+			eq_blocks = i / block_size
+			break
+	for prefix_len in range(1, block_size):
+		enc_data1 = func_sample(data + "A")
+		enc_data2 = func_sample(data + "B")
+		data = data + "A"
+		for i in range(len(enc_data1)):
+			if enc_data1[i] != enc_data2[i]:
+				eq_blocks2 = i / block_size
+				break
+		if eq_blocks < eq_blocks2:
+			return block_size - prefix_len + eq_blocks * block_size
