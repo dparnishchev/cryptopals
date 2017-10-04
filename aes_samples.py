@@ -2,9 +2,10 @@ import os
 import aes
 import pkcs7
 import xor
+import base64
 
 secret_key = os.urandom(16)
-iv = "\x00" * 16
+iv = os.urandom(16)
 
 def _parse_params(params_str):
 	data = {}
@@ -47,6 +48,31 @@ def cbc_bitflip_attack_sample_dec(ciphertext):
 			return (plaintext, True)
 	return (plaintext, False)
 
+#Sample encryption procedure for cbc padding oracle attack
+def cbc_padding_oracle_attack_sample_enc():
+	strings = [	"MDAwMDAwTm93IHRoYXQgdGhlIHBhcnR5IGlzIGp1bXBpbmc=",
+				"MDAwMDAxV2l0aCB0aGUgYmFzcyBraWNrZWQgaW4gYW5kIHRoZSBWZWdhJ3MgYXJlIHB1bXBpbic=",
+				"MDAwMDAyUXVpY2sgdG8gdGhlIHBvaW50LCB0byB0aGUgcG9pbnQsIG5vIGZha2luZw==",
+				"MDAwMDAzQ29va2luZyBNQydzIGxpa2UgYSBwb3VuZCBvZiBiYWNvbg==",
+				"MDAwMDA0QnVybmluZyAnZW0sIGlmIHlvdSBhaW4ndCBxdWljayBhbmQgbmltYmxl",
+				"MDAwMDA1SSBnbyBjcmF6eSB3aGVuIEkgaGVhciBhIGN5bWJhbA==",
+				"MDAwMDA2QW5kIGEgaGlnaCBoYXQgd2l0aCBhIHNvdXBlZCB1cCB0ZW1wbw==",
+				"MDAwMDA3SSdtIG9uIGEgcm9sbCwgaXQncyB0aW1lIHRvIGdvIHNvbG8=",
+				"MDAwMDA4b2xsaW4nIGluIG15IGZpdmUgcG9pbnQgb2g=",
+				"MDAwMDA5aXRoIG15IHJhZy10b3AgZG93biBzbyBteSBoYWlyIGNhbiBibG93"]
+	plaintext = base64.decode(strings[ord(os.urandom(1)) % len(strings)])
+	return (aes.encrypt_cbc_128(plaintext, iv, secret_key), iv)
+
+#Sample decryption procedure for cbc padding oracle attck. Decrypts message and tells
+#if it has a valid PKCS7 padding
+def cbc_padding_oracle_attack_sample_dec(ciphertext, iv):
+	plaintext = aes.decrypt_cbc_128(ciphertext, iv, secret_key, True)
+	try:
+		pkcs7.validate_padding(plaintext)
+		return True
+	except Exception:
+		return False
+
 def _solve_set2_ch13():
 	#1. Identify block size
 	(block_size, pad_size) = aes.identify_block_size(profile_for)
@@ -82,4 +108,31 @@ def _solve_set2_ch16():
 	ciphertext = ciphertext[:16] + C1_ + ciphertext[32:]
 	print cbc_bitflip_attack_sample_dec(ciphertext)
 
-_solve_set2_ch16()
+#CBC padding oracle attack
+#We use an assumption that we already know block size (16 bytes)
+def _solve_set3_ch17():
+	(ciphertext, iv) = cbc_padding_oracle_attack_sample_enc()
+	block_size = 16
+	ciphertext = iv + ciphertext
+	plaintext = ""
+	while (len(ciphertext) / block_size) > 1:
+		c0 = ciphertext[-block_size * 2:-block_size]
+		c1 = ciphertext[-block_size:]
+		plainblock = ""
+		for j in range(block_size, 0, -1):
+			padd_byte = chr(block_size - j + 1)
+			_c0 = c0[:j] + xor.xor(c0[j:], xor.xor(plainblock, padd_byte * (ord(padd_byte) - 1)))
+			flag = False
+			for k in range(1, 0x100):
+				scr = "\x00" * (j - 1) + chr(k) + "\x00" * (block_size - j)
+				if cbc_padding_oracle_attack_sample_dec(xor.xor(_c0, scr) + c1, iv):
+					plainblock = xor.xor(chr(k), padd_byte) + plainblock
+					flag = True
+			if not flag:
+				#print "no byte!"
+				plainblock = padd_byte + plainblock
+		ciphertext = ciphertext[:-16]
+		plaintext = plainblock + plaintext
+	print pkcs7.unpad(plaintext)
+
+_solve_set3_ch17()

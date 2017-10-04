@@ -4,13 +4,17 @@ import xor
 import pkcs7
 from Crypto.Cipher import AES
 
-def decrypt_ecb_128(ciphertext, key):
-	return pkcs7.unpad(AES.new(key, AES.MODE_ECB, "").decrypt(ciphertext))
+def decrypt_ecb_128(ciphertext, key, no_unpad = False):
+	plaintext = AES.new(key, AES.MODE_ECB, "").decrypt(ciphertext)
+	if no_unpad:
+		return plaintext
+	else:
+		return pkcs7.unpad(plaintext)
 
 def encrypt_ecb_128(plaintext, key):
 	return AES.new(key, AES.MODE_ECB, "").encrypt(pkcs7.pad(plaintext, 16))
 
-def decrypt_cbc_128(ciphertext, iv, key):
+def decrypt_cbc_128(ciphertext, iv, key, no_unpad = False):
 	cipher = AES.new(key, AES.MODE_ECB, "")
 	plaintext = ""
 	for i in range(0, len(ciphertext) / 16):
@@ -20,7 +24,10 @@ def decrypt_cbc_128(ciphertext, iv, key):
 		else:
 			prev_block = ciphertext[16 * (i - 1): 16 * i]
 			plaintext = plaintext + xor.xor(cipher.decrypt(block), prev_block)
-	return pkcs7.unpad(plaintext)
+	if no_unpad:
+		return plaintext
+	else:
+		return pkcs7.unpad(plaintext)
 
 def encrypt_cbc_128(plaintext, iv, key):
 	cipher = AES.new(key, AES.MODE_ECB, "")
